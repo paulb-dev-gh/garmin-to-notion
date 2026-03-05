@@ -186,6 +186,8 @@ def activity_needs_update(existing_activity: dict, new_activity: dict) -> bool:
         new_activity.get('anaerobicTrainingEffectMessage', 'Unknown')
     ) or
         existing_props['PR']['checkbox'] != new_activity.get('pr', False) or
+        existing_props['Avg HR']['number'] != round(new_activity.get('averageHR', 0)) or
+        existing_props['Max HR']['number'] != round(new_activity.get('maxHR', 0)) or
         existing_props['Fav']['checkbox'] != new_activity.get('favorite', False) or
         existing_props['Activity Type']['select']['name'] != activity_type or
         (has_subactivity and existing_props['Subactivity Type']['select']['name'] != activity_subtype) or
@@ -226,7 +228,10 @@ def create_activity(notion_client: NotionClient, database_id: str, activity: dic
             "select": {"name": format_training_message(activity.get('anaerobicTrainingEffectMessage', 'Unknown'))}
         },
         "PR": {"checkbox": activity.get('pr', False)},
+        "Avg HR": {"number": round(activity.get('averageHR', 0))},
+        "Max HR": {"number": round(activity.get('maxHR', 0))},
         "Fav": {"checkbox": activity.get('favorite', False)}
+        
     }
 
     page = {
@@ -272,6 +277,8 @@ def update_activity(notion_client: NotionClient, existing_activity: dict, new_ac
             "select": {"name": format_training_message(new_activity.get('anaerobicTrainingEffectMessage', 'Unknown'))}
         },
         "PR": {"checkbox": new_activity.get('pr', False)},
+        "Avg HR": {"number": round(activity.get('averageHR', 0))},
+        "Max HR": {"number": round(activity.get('maxHR', 0))},
         "Fav": {"checkbox": new_activity.get('favorite', False)}
     }
 
