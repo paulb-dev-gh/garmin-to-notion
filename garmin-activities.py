@@ -277,8 +277,8 @@ def update_activity(notion_client: NotionClient, existing_activity: dict, new_ac
             "select": {"name": format_training_message(new_activity.get('anaerobicTrainingEffectMessage', 'Unknown'))}
         },
         "PR": {"checkbox": new_activity.get('pr', False)},
-        "Avg HR": {"number": round(activity.get('averageHR', 0))},
-        "Max HR": {"number": round(activity.get('maxHR', 0))},
+        "Avg HR": {"number": round(new_activity.get('averageHR', 0))},
+        "Max HR": {"number": round(new_activity.get('maxHR', 0))},
         "Fav": {"checkbox": new_activity.get('favorite', False)}
     }
 
