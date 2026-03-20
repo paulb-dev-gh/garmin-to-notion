@@ -1,4 +1,9 @@
 import os
+import io
+import base64
+import zipfile
+import tempfile
+import time
 from datetime import datetime, UTC, timedelta
 
 import pytz
@@ -113,6 +118,49 @@ def format_pace(average_speed: float) -> str:
         return f"{minutes}:{seconds:02d} min/km"
     else:
         return ""
+
+
+def login_with_tokens(garmin_email: str, garmin_password: str) -> GarminClient:
+    """
+    Tente de se connecter via les tokens OAuth sauvegardés (GARMIN_TOKENS).
+    Si les tokens ne sont pas disponibles ou expirés, utilise email/password en fallback.
+    """
+    garmin_tokens_b64 = os.getenv("GARMIN_TOKENS")
+
+    if garmin_tokens_b64:
+        try:
+            print("Tentative de connexion via tokens OAuth...")
+            token_bytes = base64.b64decode(garmin_tokens_b64)
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                with zipfile.ZipFile(io.BytesIO(token_bytes)) as zf:
+                    zf.extractall(tmp_dir)
+                garmin_client = GarminClient()
+                garmin_client.garth.load(tmp_dir)
+                garmin_client.display_name  # Test que les tokens sont valides
+                print("✅ Connexion réussie via tokens OAuth")
+                return garmin_client
+        except Exception as e:
+            print(f"⚠️  Tokens OAuth invalides ou expirés : {e}")
+            print("Fallback vers connexion email/password...")
+
+    # Fallback : connexion classique email/password
+    print("Connexion via email/password...")
+    garmin_client = GarminClient(garmin_email, garmin_password)
+    garmin_client.login()
+    print("✅ Connexion réussie via email/password")
+    return garmin_client
+
+
+def notion_request_with_retry(func, *args, max_retries=3, **kwargs):
+    for attempt in range(max_retries):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            if attempt < max_retries - 1:
+                print(f"Notion API error: {e}. Retrying in 5s... ({attempt + 1}/{max_retries})")
+                time.sleep(5)
+            else:
+                raise
 
 
 def activity_exists(
@@ -231,7 +279,6 @@ def create_activity(notion_client: NotionClient, database_id: str, activity: dic
         "Avg HR": {"number": round(activity.get('averageHR', 0))},
         "Max HR": {"number": round(activity.get('maxHR', 0))},
         "Fav": {"checkbox": activity.get('favorite', False)}
-        
     }
 
     page = {
@@ -242,7 +289,7 @@ def create_activity(notion_client: NotionClient, database_id: str, activity: dic
     if icon_url:
         page["icon"] = {"type": "external", "external": {"url": icon_url}}
 
-    notion_client.pages.create(**page)
+    notion_request_with_retry(notion_client.pages.create, **page)
 
 
 def update_activity(notion_client: NotionClient, existing_activity: dict, new_activity: dict) -> None:
@@ -290,7 +337,7 @@ def update_activity(notion_client: NotionClient, existing_activity: dict, new_ac
     if icon_url:
         update["icon"] = {"type": "external", "external": {"url": icon_url}}
 
-    notion_client.pages.update(**update)
+    notion_request_with_retry(notion_client.pages.update, **update)
 
 
 def main():
@@ -303,9 +350,8 @@ def main():
     database_id = os.getenv("NOTION_DB_ID")
     garmin_fetch_limit = int(os.getenv("GARMIN_ACTIVITIES_FETCH_LIMIT") or "1000")
 
-    # Initialize Garmin client and login
-    garmin_client = GarminClient(garmin_email, garmin_password)
-    garmin_client.login()
+    # Connexion Garmin via tokens OAuth ou email/password en fallback
+    garmin_client = login_with_tokens(garmin_email, garmin_password)
     notion_client = NotionClient(auth=notion_token)
 
     # Get all activities
