@@ -1,5 +1,4 @@
 name: Sync Garmin to Notion
-
 on:
   schedule:
     - cron: '0 5,17 * * *'
@@ -32,10 +31,12 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           pip install -r requirements.txt
 
-      - name: Run script
+      - name: Run scripts
+        id: garmin_sync                          # ← id nécessaire pour lire l'output
         env:
           GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
           GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
+          GARMIN_TOKENS: ${{ secrets.GARMIN_TOKENS }}    # ← nouveau secret
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
           NOTION_PR_DB_ID: ${{ secrets.NOTION_PR_DB_ID }}
@@ -48,3 +49,13 @@ jobs:
           python personal-records.py
           python daily-steps.py
           python sleep-data.py
+
+      # ← Nouveau : persister les tokens si régénérés
+      - name: Update GARMIN_TOKENS secret if refreshed
+        if: steps.garmin_sync.outputs.garmin_tokens != ''
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}        # ← Personal Access Token avec scope "secrets"
+        run: |
+          gh secret set GARMIN_TOKENS \
+            --body "${{ steps.garmin_sync.outputs.garmin_tokens }}" \
+            --repo ${{ github.repository }}
