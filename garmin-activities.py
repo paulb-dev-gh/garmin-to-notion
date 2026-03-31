@@ -121,10 +121,6 @@ def format_pace(average_speed: float) -> str:
 
 
 def login_with_tokens(garmin_email: str, garmin_password: str) -> GarminClient:
-    """
-    Tente de se connecter via les tokens OAuth sauvegardés (GARMIN_TOKENS).
-    Si les tokens ne sont pas disponibles ou expirés, utilise email/password en fallback.
-    """
     garmin_tokens_b64 = os.getenv("GARMIN_TOKENS")
 
     if garmin_tokens_b64:
@@ -148,7 +144,29 @@ def login_with_tokens(garmin_email: str, garmin_password: str) -> GarminClient:
     garmin_client = GarminClient(garmin_email, garmin_password)
     garmin_client.login()
     print("✅ Connexion réussie via email/password")
+
+    # ✅ NOUVEAU : Sauvegarder les tokens pour les prochains runs
+    save_tokens_to_env(garmin_client)
+
     return garmin_client
+
+
+def save_tokens_to_env(garmin_client: GarminClient) -> None:
+    """Sauvegarde les tokens OAuth dans un fichier pour que le workflow GitHub les persiste."""
+    try:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            garmin_client.garth.dump(tmp_dir)
+            buf = io.BytesIO()
+            with zipfile.ZipFile(buf, 'w') as zf:
+                for fname in os.listdir(tmp_dir):
+                    zf.write(os.path.join(tmp_dir, fname), fname)
+            b64 = base64.b64encode(buf.getvalue()).decode()
+            # Écrire dans un fichier que le workflow GitHub va lire
+            with open(os.environ.get("GITHUB_OUTPUT", "/dev/null"), "a") as f:
+                f.write(f"garmin_tokens={b64}\n")
+            print("✅ Tokens OAuth sauvegardés pour le prochain run")
+    except Exception as e:
+        print(f"⚠️  Impossible de sauvegarder les tokens : {e}")
 
 
 def notion_request_with_retry(func, *args, max_retries=3, **kwargs):
